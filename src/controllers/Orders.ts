@@ -1,8 +1,10 @@
 import { Request, Response } from 'express';
 import {  activeOrderSchemaJoi } from "../models/schema/ActiveOrder"
+import {  itemTotalSchemaJoi } from "../models/schema/ItemTotal"
 import ActiveOrder from "../models/ActiveOrder"
 import {IItemTotal} from "../models/ItemTotal";
 import {validate} from "../models/schema/validator";
+import {StatusCodes} from "http-status-codes";
 
 type OrderItem = "cpn" | "cpd" | "cps" | "cpt" | "cpm" | "cpa" | "trh" | "trmo" | "trhn" | "trd" | "trl" | "trml" | "soc" | "sovq";
 const fullItemName: Record<OrderItem, number | string> = {
@@ -72,11 +74,29 @@ const getPrice = (key: string) => {
     }
 }
 
-const MakeNewOrder = async (req: Request, res: Response) => {
-    const { name, classNum, phone_number, item_total }: { name: string, classNum: string, phone_number: string, item_total: IItemTotal[]} = req.body;
+function Uid(): string {
+    const characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let id = '';
 
-    // TODO: Wait for mappings and map it
-    const price = [...item_total.map((item) => {
+    for (let i = 0; i < 6; i++) {
+        const randomIndex = Math.floor(Math.random() * characters.length);
+        id += characters[randomIndex];
+    }
+
+    return id
+}
+
+const MakeNewOrder = async (req: Request, res: Response) => {
+    const { name, classNum, phone_number, items_total }: { name: string, classNum: string, phone_number: string, items_total: IItemTotal[]} = req.body;
+
+    if (!items_total || !Array.isArray(items_total)){
+        return res.status(StatusCodes.BAD_REQUEST).json({
+            success: false,
+            message: "Item(s) list was not provided"
+        });
+    }
+
+    const price = items_total.map((item) => {
         const result = getPrice(item.id)
 
         if (!result.success){
@@ -84,11 +104,12 @@ const MakeNewOrder = async (req: Request, res: Response) => {
         }
 
         return result.price!
-    })].reduce((a, b) => a + b, 0);
+    }).reduce((a, b) => a + b, 0);
 
-    const orderToAdd = { name, class: classNum, phone_number, item_total, price }
+    const order_id = Uid()
+    const orderToAdd = { order_id, name, class: classNum, phone_number, items_total, price }
 
-    const validateResult = validate(activeOrderSchemaJoi, this)
+    const validateResult = validate(activeOrderSchemaJoi, orderToAdd)
     if (!validateResult.success) {
         res.status(validateResult.status).json({
             success: validateResult.success,
@@ -98,6 +119,11 @@ const MakeNewOrder = async (req: Request, res: Response) => {
 
     const newActiveOrder = new ActiveOrder(orderToAdd)
     await newActiveOrder.save()
+
+    res.status(StatusCodes.OK).json({
+        success: true,
+        message: `Order ${order_id} for ${name} has been created`
+    })
 }
 
 const CancelOrder = (req: Request, res: Response) => {}
