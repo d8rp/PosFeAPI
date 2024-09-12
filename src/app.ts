@@ -19,6 +19,13 @@ import ConnectToDB from "./db/Connect";
 
     app.use(express.json())
     app.use(express.urlencoded({ extended: true }))
+
+    app.get("/", (req, res) => {
+        res.json({
+            success: true
+        })
+    })
+
     app.use(orderRoutes)
 
     app.listen(port, () => console.log(`Server started on port ${port}`))
